@@ -3,7 +3,7 @@ const XLSX = require("xlsx");
 const app = express();
 const PORT = 5000;
 
-app.use(express.json()); // to parse JSON body
+app.use(express.json());
 
 // Load Excel file
 const workbook = XLSX.readFile("Form.xlsx");
@@ -16,7 +16,7 @@ app.get("/forms", (req, res) => {
   res.json({ unique_HrDocuments: formNames });
 });
 
-// ✅ POST endpoint: get form details from body payload
+// POST - Get specific form details
 app.post("/form", (req, res) => {
   const { formName } = req.body;
 
@@ -42,8 +42,8 @@ app.post("/form", (req, res) => {
     }
 
     let typeName = "Single Input";
-    if (type.includes("Multiple Choice")) typeName = "Multiple Choice";
-    else if (type.includes("Date Picker")) typeName = "Date Picker";
+    if (type.includes("multiple")) typeName = "Multiple Choice";
+    else if (type.includes("date")) typeName = "Date Picker";
 
     return {
       question: (row.Question || row.question || "").trim(),

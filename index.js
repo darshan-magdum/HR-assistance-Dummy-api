@@ -1,72 +1,61 @@
 const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-
+const XLSX = require("xlsx");
 const app = express();
+const PORT = 5000;
 
-app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json()); // to parse JSON body
 
-// 1️⃣ Fetch all HR Forms
-// 1️⃣ Fetch all HR Forms
-app.get("/api/hr/forms", (req, res) => {
-  const forms = [
-    { id: "leave_request", name: "Leave Request" },
-    { id: "sick_leave", name: "Sick Leave" },
-    { id: "onboarding_form", name: "Employee Onboarding" },
-    { id: "reimbursement", name: "Expense Reimbursement" }
-  ];
+// Load Excel file
+const workbook = XLSX.readFile("Form.xlsx");
+const sheetName = workbook.SheetNames[0];
+const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-  // ✅ Return in required format
-  res.json({
-    unique_HrDocuments: forms.map(f => f.name)
-  });
+// GET all forms
+app.get("/forms", (req, res) => {
+  const formNames = [...new Set(sheet.map(row => row.Form || row.form))].filter(Boolean);
+  res.json({ unique_HrDocuments: formNames });
 });
 
-// 2️⃣ Get questions for selected form
-app.post("/api/hr/questions", (req, res) => {
-  const { form_id } = req.body;
+// ✅ POST endpoint: get form details from body payload
+app.post("/form", (req, res) => {
+  const { formName } = req.body;
 
-  const questionSets = {
-    sick_leave: [
-      { options: [], question: "Subject", type: "Single Line Text" },
-      { options: [], question: "Request Description", type: "Single Line Text" }
-    ],
-    onboarding_form: [
-      { options: [], question: "Full Name", type: "Single Line Text" },
-      { options: ["HR", "Finance", "IT"], question: "Department", type: "Dropdown" }
-    ],
-    reimbursement: [
-      { options: ["Travel", "Meals", "Supplies"], question: "Expense Type", type: "Dropdown" },
-      { options: [], question: "Amount", type: "Single Line Text" }
-    ]
-  };
-
-  // Return directly as an array
-  res.json(questionSets[form_id] || []);
-});
-
-
-// 3️⃣ Submit form answers
-app.post("/api/hr/submit", (req, res) => {
-  const { form_id, result } = req.body;
-
-  console.log("Form Submitted:", form_id, result);
-
-  // Simulate DB insert or SharePoint write
-  const success = true;
-
-  if (success) {
-    res.json({
-      status: "success",
-      message: "Request submitted successfully",
-      Request_id: "HR" + Math.floor(Math.random() * 10000)
-    });
-  } else {
-    res.json({ status: "error", message: "Failed to submit request" });
+  if (!formName) {
+    return res.status(400).json({ error: "Missing 'formName' in request body" });
   }
+
+  const filtered = sheet.filter(
+    row => (row.Form || row.form)?.toLowerCase() === formName.toLowerCase()
+  );
+
+  if (filtered.length === 0) {
+    return res.status(404).json({ error: `Form '${formName}' not found` });
+  }
+
+  const result = filtered.map(row => {
+    let type = (row.Type || row.type || "").toLowerCase().trim();
+    let optionData = row.Option || row.option || "";
+
+    let options = [];
+    if (optionData && optionData.toLowerCase() !== "na") {
+      options = optionData.split(",").map(opt => opt.trim());
+    }
+
+    let typeName = "Single Input";
+    if (type.includes("Multiple Choice")) typeName = "Multiple Choice";
+    else if (type.includes("Date Picker")) typeName = "Date Picker";
+
+    return {
+      question: (row.Question || row.question || "").trim(),
+      type: typeName,
+      options
+    };
+  });
+
+  res.json(result);
 });
 
 // Start server
-const PORT = 3000;
-app.listen(PORT, () => console.log(`✅ HR API running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+});
